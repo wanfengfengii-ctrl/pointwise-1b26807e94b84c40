@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from plans.catalog import load_plan
+from plans.catalog import load_any_plan
 from reports.storage import list_handover_rows
 
 
@@ -13,5 +13,5 @@ class HandoverEntry:
 
 
 def handover(archive, plan_id):
-    plan = load_plan(archive, plan_id)
+    plan = load_any_plan(archive, plan_id)
     return [HandoverEntry(report_id, start) for report_id, start in list_handover_rows(archive, plan.plan_id)]

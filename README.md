@@ -53,6 +53,13 @@ with closing(open_archive('review.sqlite3')) as archive:
 - `analysis.request.publish_report(archive, plan_id, start, handoff, *, before_commit=None)` 返回 `FormalReport`，其中有 `receipt`、`report_id` 和 `plan_id`。起站和一对有向交接端点必须是该计划的公开站，合法端点之间的零概率交接仍可查询。未知计划抛 `PlanNotFound`，非法起站或交接抛 `InvalidReviewRequest`。提交前接点接收待提交的 `Receipt`，供调用方观察或以异常终止提交。接点在事务中执行，只读视察或抛出异常均可，事务控制由签发负责。签发异常抛 `PublishError`，没有成功回执。
 - `reports.history.read_report(archive, report_id)` 从已提交正文恢复原报告及回执，未知号抛 `ReportNotFound`。`reports.handover.handover(archive, plan_id)` 返回按正式签发先后排列的 `HandoverEntry(report_id, start)` 列表。已知空计划返回空列表，未知计划抛 `PlanNotFound`。
 
+## 抽隔计划接口（详见 GATES.md）
+
+- `plans.freeze.freeze_isolation_plan(source, archive, revision_id, gate_keys)` 按确切修订发行固定抽隔计划。闸位键为 `(出发站, 去向)` 二元组、按集合解释，空组合法；合计件次为正且至少一端私有的有向转送才可装闸，非法闸位或不可读修订抛 `FreezeError`，无新计划。归档载荷只保留公开站名、归一化有理转送图和别名化闸位，私站名、原计数、源库终局名留在源库，重开后无需源库即可复算任意档位。
+- `plans.catalog.load_isolation_plan(archive, plan_id)` 按号领取抽隔计划，返回带 `plan_id`、`revision_id`、`stations` 的计划对象；未知计划抛 `PlanNotFound`，对 V1 计划调用抛 `ValueError`。`load_plan` 与 `read_report` 对抽隔类记录同理抛 `ValueError`，两类计划与报告共用既有号域，`load_any_plan` 供交班等跨类查询使用。
+- `analysis.request` 同包的 `analysis.isolation_request.publish_isolation_report(archive, plan_id, start, p, *, before_commit=None)` 在源库关闭后凭计划号签报。`p` 为 `[0, 1]` 内 `Fraction`，或端档整数 `0`、`1`；浮点、布尔、越界值、非法起站或 V1 计划抛 `InvalidReviewRequest`。返回的 `IsolationReport` 含 `report_id`、`plan_id`、`revision_id`、`start`、`p`、`receipt` 及放行、原拒绝、抽隔、永不终结四项精确 `Fraction`，合计为一。请求、实际计划、源修订、四项结论、回执和交班在同一事务提交；中止或写入失败抛 `PublishError` 且无新增，可重试。
+- `reports.history.read_isolation_report(archive, report_id)` 按号恢复已签抽隔报告，未知号抛 `ReportNotFound`，对 V1 报告抛 `ValueError`。勘误产生新来源与计划号，旧计划仍可签报，重开归档后旧报告号读回原值。`handover` 同时覆盖两类计划。
+
 ## 核账口径
 
 计数中的同向重复行按件次合加，按出发站总件次归一。`FixedPlan.row_for(station)` 依次返回按声明顺序排列的公开站列，以及 `PlanOutcome.RELEASE`、`REJECT`、`NEVER` 列。私有转送一直解释到首次到达公开站或终局。无可观测出边及私有路径永不到达都计入 `NEVER`。回到同一公开站也占其对应列。各列值均为精确 `Fraction`，每行合计为一。计划持久化只含公开账和固定来源号，私有定义及原计数在源库。
